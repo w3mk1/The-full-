@@ -3,323 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SNTF Go Pro - Notifications Enabled</title>
+    <title>SNTF Go - Beni Mered/Agha</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     
     <style>
-        :root {
-            --md-primary: #006d3a;
-            --md-surface: #f3f4f1;
-            --md-card: #ffffff;
-            --md-text: #1a1c19;
-            --md-outline: #72796f;
-        }
+        :root { --p: #006d3a; --s: #f3f4f2; --c: #ffffff; --t: #1a1c19; --accent: #ffb400; }
+        .dark-mode { --s: #111411; --c: #1c1f1c; --t: #e2e3dd; }
 
-        .dark-mode {
-            --md-surface: #111411;
-            --md-card: #1c1f1c;
-            --md-text: #e2e3dd;
-            --md-outline: #424940;
-        }
-
-        body {
-            background: var(--md-surface);
-            color: var(--md-text);
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            margin: 0; padding: 10px;
-            transition: 0.3s;
-        }
-
+        body { background: var(--s); color: var(--t); font-family: 'Segoe UI', sans-serif; margin: 0; padding: 10px; transition: 0.3s; }
         .app-container { max-width: 500px; margin: auto; }
-
-        .card {
-            background: var(--md-card);
-            border-radius: 28px;
-            padding: 20px;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            border: 1px solid var(--md-outline);
-        }
-
-        .input-field {
-            background: var(--md-surface);
-            padding: 12px;
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-            position: relative;
-        }
-
-        input {
-            background: none; border: none; outline: none;
-            color: inherit; width: 100%; font-size: 16px;
-        }
-
-        .suggestion-box {
-            position: absolute; top: 100%; left: 0; right: 0;
-            background: var(--md-card); z-index: 2000;
-            max-height: 150px; overflow-y: auto;
-            border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-        }
-
-        .suggestion-item { padding: 12px; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.05); }
-        .suggestion-item:hover { background: var(--md-primary); color: white; }
-
-        .btn-gps {
-            background: #e8f5e9; color: var(--md-primary);
-            border: 1px solid var(--md-primary);
-            width: 100%; padding: 10px; border-radius: 100px;
-            cursor: pointer; margin-bottom: 10px; font-weight: bold;
-        }
-
-        .btn-primary {
-            background: var(--md-primary); color: white; border: none;
-            width: 100%; padding: 16px; border-radius: 100px;
-            font-weight: bold; cursor: pointer; font-size: 16px;
-        }
-
-        #map { height: 250px; border-radius: 20px; margin-top: 10px; z-index: 1; }
         
-        .ticket {
-            background: var(--md-primary); color: white;
-            padding: 20px; border-radius: 24px; margin-top: 15px;
-        }
-
-        .notify-btn {
-            width: 100%; padding: 12px; margin-top: 10px; 
-            border-radius: 12px; border: 2px dashed white; 
-            background: rgba(255,255,255,0.1); color: white;
-            font-weight: bold; cursor: pointer;
-        }
-
-        header { display: flex; justify-content: space-between; align-items: center; padding: 10px; }
+        .card { background: var(--c); border-radius: 24px; padding: 16px; margin-bottom: 12px; border: 1px solid rgba(0,0,0,0.05); }
         
-        .lang-select {
-            padding: 8px; border-radius: 10px; background: var(--md-card);
-            color: var(--md-text); border: 1px solid var(--md-outline);
+        /* تصميم الجدول الزمني */
+        .time-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,0.05); }
+        .time-badge { background: var(--p); color: white; padding: 4px 12px; border-radius: 8px; font-weight: bold; }
+        .next-trip { border: 2px solid var(--p); background: #e8f5e9; }
+
+        .station-timeline { border-right: 2px solid var(--p); margin: 20px 10px; padding-right: 20px; }
+        .station-node { position: relative; padding-bottom: 20px; }
+        .station-node::before { 
+            content: ''; position: absolute; right: -27px; top: 5px; 
+            width: 12px; height: 12px; border-radius: 50%; background: var(--p); border: 3px solid var(--c);
         }
+
+        #map { height: 200px; border-radius: 16px; margin-bottom: 15px; }
+        .btn-action { background: var(--p); color: white; border: none; width: 100%; padding: 16px; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        
+        .status-chip { display: inline-block; padding: 2px 8px; border-radius: 50px; font-size: 0.8rem; background: var(--accent); color: #000; margin-bottom: 5px; }
     </style>
 </head>
 <body class="light-mode">
 
-    <div class="app-container">
-        <header>
-            <div id="app-logo" style="font-weight: bold; font-size: 1.3rem;">🚆 SNTF Go Pro</div>
-            <div style="display: flex; gap: 10px; align-items: center;">
-                <select id="lang-selector" class="lang-select" onchange="changeLanguage()">
-                    <option value="ar">العربية</option>
-                    <option value="fr">Français</option>
-                    <option value="en">English</option>
-                </select>
-                <button onclick="toggleTheme()" style="background:none; border:none; cursor:pointer; font-size:1.5rem;">🌙</button>
-            </div>
-        </header>
+<div class="app-container">
+    <header style="display: flex; justify-content: space-between; align-items: center; padding: 10px;">
+        <h2 style="margin:0"><i class="fas fa-train"></i> SNTF Connect</h2>
+        <button onclick="document.body.classList.toggle('dark-mode')" style="background:none; border:none; font-size:1.2rem;">🌙</button>
+    </header>
 
-        <div class="card">
-            <button class="btn-gps" id="gps-btn" onclick="getLocation()">
-                <i class="fas fa-crosshairs"></i> تحديد أقرب محطة
-            </button>
-            
-            <div class="input-field">
-                <i class="fas fa-map-marker-alt" style="color:var(--md-primary)"></i>
-                <input type="text" id="from-input" onkeyup="filterStations('from')">
-                <div id="from-list" class="suggestion-box"></div>
+    <div class="card next-trip">
+        <span class="status-chip"><i class="fas fa-bolt"></i> الرحلة القادمة الآن</span>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h3 style="margin:0">06:45</h3>
+                <small>بني مراد ⮕ آغا</small>
             </div>
-
-            <div class="input-field">
-                <i class="fas fa-flag-checkered"></i>
-                <input type="text" id="to-input" onkeyup="filterStations('to')">
-                <div id="to-list" class="suggestion-box"></div>
+            <div style="text-align: left;">
+                <span id="countdown" style="font-weight: bold; color: var(--p);">--:--</span>
             </div>
-
-            <button class="btn-primary" id="search-btn" onclick="startTracking()">بحث وتتبع</button>
         </div>
-
-        <div id="map-section" class="card" style="display:none;">
-            <div id="map"></div>
-            <p id="status-text" style="text-align: center; margin-top: 10px; font-weight: bold;"></p>
-        </div>
-
-        <div id="results"></div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        // نظام الترجمة المحدث مع الإشعارات
-        const translations = {
-            ar: {
-                logo: "🚆 SNTF الجزائر",
-                gps: "تحديد أقرب محطة تلقائياً",
-                from: "من (انطلاق)...",
-                to: "إلى (وصول)...",
-                search: "بحث وتتبع الرحلة",
-                tracking: "القطار يتحرك الآن من ",
-                ticketTitle: "🎫 تفاصيل الرحلة",
-                price: "السعر: 120 دج",
-                notify: "🔔 تفعيل الإشعارات للرحلة",
-                gpsSuccess: "تم تحديد موقعك! الأقرب هي: ",
-                error: "يرجى اختيار المحطات أولاً",
-                notifTitle: "SNTF Go - تنبيه",
-                notifBody: "القطار يقترب من محطة الوصول! استعد للنزول."
-            },
-            fr: {
-                logo: "🚆 SNTF Algérie",
-                gps: "Trouver la gare la plus proche",
-                from: "De (Départ)...",
-                to: "À (Arrivée)...",
-                search: "Rechercher et Suivre",
-                tracking: "Le train se déplace de ",
-                ticketTitle: "🎫 Détails du voyage",
-                price: "Prix: 120 DZD",
-                notify: "🔔 Activer les notifications",
-                gpsSuccess: "Position trouvée! La plus proche: ",
-                error: "Veuillez choisir les gares",
-                notifTitle: "SNTF Go - Alerte",
-                notifBody: "Le train approche de votre destination !"
-            },
-            en: {
-                logo: "🚆 SNTF Algeria",
-                gps: "Find Nearest Station",
-                from: "From (Departure)...",
-                to: "To (Arrival)...",
-                search: "Search & Track",
-                tracking: "Train is moving from ",
-                ticketTitle: "Trip Details",
-                price: "Price: 120 DZD",
-                notify: "🔔 Enable Notifications",
-                gpsSuccess: "Location found! Nearest: ",
-                error: "Please select stations first",
-                notifTitle: "SNTF Go - Alert",
-                notifBody: "The train is approaching your destination!"
-            }
-        };
+    <div class="card">
+        <div id="map"></div>
+        <div class="station-timeline" id="timeline"></div>
+    </div>
 
-        const stationsDB = [
-            { nameAr: "الجزائر - آغا", nameFr: "Alger - Agha", nameEn: "Algiers - Agha", lat: 36.7645, lng: 3.0515 },
-            { nameAr: "بني مراد", nameFr: "Beni Mourad", nameEn: "Beni Mourad", lat: 36.5050, lng: 2.8610 },
-            { nameAr: "البليدة", nameFr: "Blida", nameEn: "Blida", lat: 36.4701, lng: 2.8288 },
-            { nameAr: "وهران", nameFr: "Oran", nameEn: "Oran", lat: 35.6971, lng: -0.6308 },
-            { nameAr: "قسنطينة", nameFr: "Constantine", nameEn: "Constantine", lat: 36.3650, lng: 6.6147 }
-        ];
+    <div class="card">
+        <h4 style="margin-top:0"><i class="fas fa-calendar-alt"></i> جدول مواعيد اليوم</h4>
+        <div id="schedule-list"></div>
+    </div>
+</div>
 
-        let currentLang = 'ar';
-        let map, routeLine;
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // 1. قاعدة بيانات المحطات الدقيقة
+    const stations = [
+        { name: "بني مراد", lat: 36.5050, lng: 2.8610 },
+        { name: "بوفاريك", lat: 36.5744, lng: 2.9119 },
+        { name: "بئر توتة", lat: 36.6433, lng: 2.9872 },
+        { name: "الحراش", lat: 36.7200, lng: 3.1300 },
+        { name: "حسين داي", lat: 36.7450, lng: 3.0800 },
+        { name: "الجزائر - آغا", lat: 36.7645, lng: 3.0515 }
+    ];
 
-        function changeLanguage() {
-            currentLang = document.getElementById('lang-selector').value;
-            const t = translations[currentLang];
-            document.getElementById('app-logo').innerText = t.logo;
-            document.getElementById('gps-btn').innerHTML = `<i class="fas fa-crosshairs"></i> ${t.gps}`;
-            document.getElementById('from-input').placeholder = t.from;
-            document.getElementById('to-input').placeholder = t.to;
-            document.getElementById('search-btn').innerText = t.search;
-            document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
-        }
+    // 2. مواقيت الرحلات (محاكاة للواقع)
+    const tripTimes = ["06:10", "06:45", "07:20", "08:00", "09:30", "12:15", "15:40", "17:10"];
 
-        // خاصية الإشعارات
-        function enableNotifications() {
-            if (!("Notification" in window)) {
-                alert("متصفحك لا يدعم الإشعارات.");
-                return;
-            }
+    function initApp() {
+        renderTimeline();
+        renderSchedule();
+        initMap();
+        startCountdown();
+    }
 
-            Notification.requestPermission().then(permission => {
-                if (permission === "granted") {
-                    const t = translations[currentLang];
-                    // إرسال إشعار تجريبي فوري
-                    new Notification(t.notifTitle, {
-                        body: t.notifBody,
-                        icon: "https://cdn-icons-png.flaticon.com/512/785/785431.png"
-                    });
-                }
-            });
-        }
+    function renderTimeline() {
+        const container = document.getElementById('timeline');
+        container.innerHTML = stations.map(s => `
+            <div class="station-node">
+                <strong>${s.name}</strong>
+            </div>
+        `).join('');
+    }
 
-        function filterStations(type) {
-            const query = document.getElementById(`${type}-input`).value.toLowerCase();
-            const list = document.getElementById(`${type}-list`);
-            list.innerHTML = "";
-            if (query.length < 1) return;
+    function renderSchedule() {
+        const list = document.getElementById('schedule-list');
+        list.innerHTML = tripTimes.map(time => `
+            <div class="time-row">
+                <span>الجزائر العاصمة (آغا)</span>
+                <span class="time-badge">${time}</span>
+            </div>
+        `).join('');
+    }
 
-            stationsDB.forEach(s => {
-                const name = currentLang === 'ar' ? s.nameAr : (currentLang === 'fr' ? s.nameFr : s.nameEn);
-                if (name.toLowerCase().includes(query)) {
-                    const div = document.createElement('div');
-                    div.className = "suggestion-item";
-                    div.innerText = name;
-                    div.onclick = () => selectStation(type, name, s.lat, s.lng);
-                    list.appendChild(div);
-                }
-            });
-        }
+    function initMap() {
+        map = L.map('map', {zoomControl: false}).setView([36.65, 3.0], 10);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        
+        const pathCoords = stations.map(s => [s.lat, s.lng]);
+        L.polyline(pathCoords, {color: '#006d3a', weight: 5}).addTo(map);
+        
+        L.marker(pathCoords[0]).addTo(map).bindPopup("انطلاق");
+        L.marker(pathCoords[pathCoords.length-1]).addTo(map).bindPopup("وصول");
+    }
 
-        function selectStation(type, name, lat, lng) {
-            const input = document.getElementById(`${type}-input`);
-            input.value = name;
-            input.setAttribute('data-lat', lat);
-            input.setAttribute('data-lng', lng);
-            document.getElementById(`${type}-list`).innerHTML = "";
-        }
+    function startCountdown() {
+        setInterval(() => {
+            const now = new Date();
+            // هنا يمكن ربطها بالوقت الفعلي لحساب الفرق مع أقرب رحلة
+            document.getElementById('countdown').innerText = "دقائق 12"; 
+        }, 1000);
+    }
 
-        function getLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(position => {
-                    const uLat = position.coords.latitude;
-                    const uLng = position.coords.longitude;
-                    let closest = stationsDB[0];
-                    let minDist = Infinity;
-                    stationsDB.forEach(s => {
-                        const d = Math.sqrt(Math.pow(uLat - s.lat, 2) + Math.pow(uLng - s.lng, 2));
-                        if (d < minDist) { minDist = d; closest = s; }
-                    });
-                    const name = currentLang === 'ar' ? closest.nameAr : (currentLang === 'fr' ? closest.nameFr : closest.nameEn);
-                    selectStation('from', name, closest.lat, closest.lng);
-                    alert(translations[currentLang].gpsSuccess + name);
-                });
-            }
-        }
-
-        function startTracking() {
-            const f = document.getElementById('from-input');
-            const t = document.getElementById('to-input');
-            if (!f.getAttribute('data-lat') || !t.getAttribute('data-lat')) return alert(translations[currentLang].error);
-
-            document.getElementById('map-section').style.display = 'block';
-            const sPos = [f.getAttribute('data-lat'), f.getAttribute('data-lng')];
-            const ePos = [t.getAttribute('data-lat'), t.getAttribute('data-lng')];
-
-            if (!map) {
-                map = L.map('map').setView(sPos, 10);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-            } else { map.setView(sPos, 10); }
-
-            if(routeLine) map.removeLayer(routeLine);
-            routeLine = L.polyline([sPos, ePos], {color: 'green', weight: 5}).addTo(map);
-            L.marker(sPos).addTo(map);
-            L.marker(ePos).addTo(map);
-
-            document.getElementById('status-text').innerText = translations[currentLang].tracking + f.value;
-            showResults(f.value, t.value);
-        }
-
-        function showResults(from, to) {
-            const t = translations[currentLang];
-            document.getElementById('results').innerHTML = `
-                <div class="ticket">
-                    <h3>${t.ticketTitle}</h3>
-                    <p>${from} ⮕ ${to}</p>
-                    <p>${t.price} | ⏱️ 08:45</p>
-                    <button class="notify-btn" onclick="enableNotifications()">${t.notify}</button>
-                </div>
-            `;
-        }
-
-        function toggleTheme() { document.body.classList.toggle('dark-mode'); }
-        window.onload = changeLanguage;
-    </script>
+    window.onload = initApp;
+</script>
 </body>
 </html>
