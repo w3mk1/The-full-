@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SNTF Go - اختيار المحطات</title>
+    <title>SNTF Go - Live Tracking</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
@@ -16,126 +16,118 @@
         .app-container { max-width: 500px; margin: auto; }
         .card { background: var(--c); border-radius: 24px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
 
-        /* تنسيق حقول الاختيار */
         .search-group { position: relative; margin-bottom: 15px; }
-        .input-box { 
-            width: 100%; padding: 15px; border-radius: 12px; border: 1px solid #ccc; 
-            background: var(--s); color: var(--t); font-size: 1rem; box-sizing: border-box;
-        }
+        .input-box { width: 100%; padding: 15px; border-radius: 12px; border: 1px solid #ccc; background: var(--s); color: var(--t); box-sizing: border-box; }
         
-        .suggestions {
-            position: absolute; top: 100%; left: 0; right: 0; 
-            background: var(--c); border-radius: 0 0 12px 12px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.1); z-index: 1000;
-            max-height: 200px; overflow-y: auto; display: none;
-        }
+        .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: var(--c); border-radius: 0 0 12px 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); z-index: 1000; max-height: 200px; overflow-y: auto; display: none; }
         .suggestion-item { padding: 12px; cursor: pointer; border-bottom: 1px solid var(--s); }
-        .suggestion-item:hover { background: var(--p); color: white; }
 
-        .btn-go { background: var(--p); color: white; border: none; width: 100%; padding: 15px; border-radius: 50px; font-weight: bold; cursor: pointer; }
-        #map { height: 200px; border-radius: 15px; margin-top: 15px; }
+        .btn-live { background: #d32f2f; color: white; border: none; width: 100%; padding: 15px; border-radius: 50px; font-weight: bold; cursor: pointer; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .pulse { animation: pulse-red 2s infinite; }
+        @keyframes pulse-red { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(211, 47, 47, 0); } 100% { transform: scale(0.95); } }
+
+        #map { height: 300px; border-radius: 20px; margin-top: 15px; }
+        .lang-select { padding: 8px; border-radius: 10px; background: var(--c); color: var(--t); }
     </style>
 </head>
 <body class="light-mode">
 
 <div class="app-container">
     <header style="display: flex; justify-content: space-between; align-items: center; padding: 10px;">
-        <h2><i class="fas fa-train"></i> SNTF Go</h2>
-        <button onclick="document.body.classList.toggle('dark-mode')" style="background:none; border:none; font-size:1.5rem;">🌙</button>
+        <h2 id="logo-text">SNTF Go</h2>
+        <div style="display: flex; gap: 5px;">
+            <select id="lang-select" class="lang-select" onchange="updateLang()">
+                <option value="ar">العربية</option>
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+            </select>
+            <button onclick="document.body.classList.toggle('dark-mode')" style="background:none; border:none; font-size:1.5rem;">🌙</button>
+        </div>
     </header>
 
     <div class="card">
-        <label>📍 محطة الانطلاق (الذهاب):</label>
+        <label id="label-from">📍 محطة الذهاب:</label>
         <div class="search-group">
-            <input type="text" id="from-input" class="input-box" placeholder="ابحث عن محطة..." onkeyup="searchStation('from')">
+            <input type="text" id="from-input" class="input-box" onkeyup="searchSt('from')">
             <div id="from-list" class="suggestions"></div>
         </div>
 
-        <label>🏁 محطة الوصول (الإياب):</label>
-        <div class="search-group">
-            <input type="text" id="to-input" class="input-box" placeholder="ابحث عن محطة..." onkeyup="searchStation('to')">
-            <div id="to-list" class="suggestions"></div>
-        </div>
-
-        <button class="btn-go" onclick="showResults()">عرض المواعيد والمسار</button>
+        <button class="btn-live pulse" onclick="startLiveTracking()">
+            <i class="fas fa-satellite-dish"></i> <span id="btn-live-text">تفعيل التتبع الحي عبر GPS</span>
+        </button>
     </div>
 
     <div id="result-section" class="card" style="display:none;">
         <div id="map"></div>
-        <div id="trip-info" style="margin-top:15px; text-align:center; font-weight:bold;"></div>
+        <div id="info" style="margin-top:15px; text-align:center; font-weight:bold; color:var(--p);"></div>
     </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // قائمة المحطات الكاملة لخط العفرون - الجزائر
+    const i18n = {
+        ar: { from: "📍 محطة الذهاب:", live: "تفعيل التتبع الحي عبر GPS", info: "جاري تتبع موقعك الحالي...", logo: "SNTF الجزائر" },
+        en: { from: "📍 Departure Station:", live: "Enable Live GPS Tracking", info: "Tracking your current location...", logo: "SNTF Algeria" },
+        fr: { from: "📍 Station de Départ:", live: "Activer le Suivi GPS en Direct", info: "Suivi de votre position actuelle...", logo: "SNTF Algérie" }
+    };
+
     const stations = [
-        { name: "العفرون", lat: 36.4674, lng: 2.6263 },
-        { name: "موزاية", lat: 36.4800, lng: 2.6800 },
-        { name: "الشفة", lat: 36.4900, lng: 2.7200 },
-        { name: "البليدة", lat: 36.4701, lng: 2.8288 },
-        { name: "بني مراد", lat: 36.5050, lng: 2.8610 },
-        { name: "بوفاريك", lat: 36.5744, lng: 2.9119 },
-        { name: "بابا علي", lat: 36.6500, lng: 3.0100 },
-        { name: "بئر توتة", lat: 36.6433, lng: 2.9872 },
-        { name: "جسر قسنطينة", lat: 36.7050, lng: 3.0600 },
-        { name: "الحراش", lat: 36.7200, lng: 3.1300 },
-        { name: "الجزائر - آغا", lat: 36.7645, lng: 3.0515 }
+        { name: "Beni Mered - بني مراد", lat: 36.5050, lng: 2.8610 },
+        { name: "Boufarik - بوفاريك", lat: 36.5744, lng: 2.9119 },
+        { name: "Agha - آغا", lat: 36.7645, lng: 3.0515 }
     ];
 
-    let map;
+    let map, userMarker, watchId;
 
-    function searchStation(type) {
+    function updateLang() {
+        const l = document.getElementById('lang-select').value;
+        document.getElementById('label-from').innerText = i18n[l].from;
+        document.getElementById('btn-live-text').innerText = i18n[l].live;
+        document.getElementById('logo-text').innerText = i18n[l].logo;
+        document.documentElement.dir = l === 'ar' ? 'rtl' : 'ltr';
+    }
+
+    function searchSt(type) {
         const input = document.getElementById(`${type}-input`);
         const list = document.getElementById(`${type}-list`);
         const query = input.value.toLowerCase();
-        
         list.innerHTML = "";
-        if (query.length < 1) { list.style.display = "none"; return; }
+        if (query.length < 1) return;
 
-        const filtered = stations.filter(s => s.name.includes(query));
-        
-        filtered.forEach(s => {
+        stations.filter(s => s.name.toLowerCase().includes(query)).forEach(s => {
             const div = document.createElement("div");
             div.className = "suggestion-item";
             div.innerText = s.name;
-            div.onclick = () => {
-                input.value = s.name;
-                input.setAttribute('data-lat', s.lat);
-                input.setAttribute('data-lng', s.lng);
-                list.style.display = "none";
-            };
+            div.onclick = () => { input.value = s.name; list.style.display="none"; };
             list.appendChild(div);
         });
         list.style.display = "block";
     }
 
-    function showResults() {
-        const from = document.getElementById('from-input');
-        const to = document.getElementById('to-input');
-
-        if (!from.getAttribute('data-lat') || !to.getAttribute('data-lat')) {
-            alert("يرجى اختيار المحطات من القائمة المنسدلة");
-            return;
-        }
+    function startLiveTracking() {
+        if (!navigator.geolocation) return alert("GPS not supported");
 
         document.getElementById('result-section').style.display = 'block';
-        document.getElementById('trip-info').innerText = `الرحلة من ${from.value} إلى ${to.value}`;
+        if (!map) {
+            map = L.map('map').setView([36.5050, 2.8610], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        }
 
-        initMap(
-            [from.getAttribute('data-lat'), from.getAttribute('data-lng')],
-            [to.getAttribute('data-lat'), to.getAttribute('data-lng')]
-        );
-    }
+        // خاصية التتبع الحي الحقيقية
+        watchId = navigator.geolocation.watchPosition(pos => {
+            const { latitude, longitude } = pos.coords;
+            const latlng = [latitude, longitude];
 
-    function initMap(start, end) {
-        if (map) { map.remove(); }
-        map = L.map('map').setView(start, 11);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        
-        L.marker(start).addTo(map).bindPopup("انطلاق").openPopup();
-        L.marker(end).addTo(map).bindPopup("وصول");
-        L.polyline([start, end], {color: '#006d3a'}).addTo(map);
+            if (!userMarker) {
+                userMarker = L.marker(latlng, {
+                    icon: L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#d32f2f;width:15px;height:15px;border-radius:50%;border:2px solid white;'></div>", iconSize: [15, 15] })
+                }).addTo(map).bindPopup("You are here").openPopup();
+            } else {
+                userMarker.setLatLng(latlng);
+            }
+            map.setView(latlng);
+            document.getElementById('info').innerText = i18n[document.getElementById('lang-select').value].info;
+        }, err => console.error(err), { enableHighAccuracy: true });
     }
 </script>
 </body>
