@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SNTF Go Pro</title>
+    <title>SNTF Go Pro - Notifications Enabled</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
@@ -82,16 +82,22 @@
             font-weight: bold; cursor: pointer; font-size: 16px;
         }
 
-        #map { height: 300px; border-radius: 20px; margin-top: 10px; z-index: 1; }
+        #map { height: 250px; border-radius: 20px; margin-top: 10px; z-index: 1; }
         
         .ticket {
             background: var(--md-primary); color: white;
             padding: 20px; border-radius: 24px; margin-top: 15px;
         }
 
+        .notify-btn {
+            width: 100%; padding: 12px; margin-top: 10px; 
+            border-radius: 12px; border: 2px dashed white; 
+            background: rgba(255,255,255,0.1); color: white;
+            font-weight: bold; cursor: pointer;
+        }
+
         header { display: flex; justify-content: space-between; align-items: center; padding: 10px; }
         
-        /* تحسين القائمة المنسدلة للغات */
         .lang-select {
             padding: 8px; border-radius: 10px; background: var(--md-card);
             color: var(--md-text); border: 1px solid var(--md-outline);
@@ -143,7 +149,7 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // نظام الترجمة
+        // نظام الترجمة المحدث مع الإشعارات
         const translations = {
             ar: {
                 logo: "🚆 SNTF الجزائر",
@@ -154,9 +160,11 @@
                 tracking: "القطار يتحرك الآن من ",
                 ticketTitle: "🎫 تفاصيل الرحلة",
                 price: "السعر: 120 دج",
-                notify: "تنبيهي عند الوصول",
+                notify: "🔔 تفعيل الإشعارات للرحلة",
                 gpsSuccess: "تم تحديد موقعك! الأقرب هي: ",
-                error: "يرجى اختيار المحطات أولاً"
+                error: "يرجى اختيار المحطات أولاً",
+                notifTitle: "SNTF Go - تنبيه",
+                notifBody: "القطار يقترب من محطة الوصول! استعد للنزول."
             },
             fr: {
                 logo: "🚆 SNTF Algérie",
@@ -167,9 +175,11 @@
                 tracking: "Le train se déplace de ",
                 ticketTitle: "🎫 Détails du voyage",
                 price: "Prix: 120 DZD",
-                notify: "M'alerter à l'arrivée",
+                notify: "🔔 Activer les notifications",
                 gpsSuccess: "Position trouvée! La plus proche: ",
-                error: "Veuillez choisir les gares"
+                error: "Veuillez choisir les gares",
+                notifTitle: "SNTF Go - Alerte",
+                notifBody: "Le train approche de votre destination !"
             },
             en: {
                 logo: "🚆 SNTF Algeria",
@@ -178,11 +188,13 @@
                 to: "To (Arrival)...",
                 search: "Search & Track",
                 tracking: "Train is moving from ",
-                ticketTitle: "🎫 Trip Details",
+                ticketTitle: "Trip Details",
                 price: "Price: 120 DZD",
-                notify: "Alert me on arrival",
+                notify: "🔔 Enable Notifications",
                 gpsSuccess: "Location found! Nearest: ",
-                error: "Please select stations first"
+                error: "Please select stations first",
+                notifTitle: "SNTF Go - Alert",
+                notifBody: "The train is approaching your destination!"
             }
         };
 
@@ -200,17 +212,31 @@
         function changeLanguage() {
             currentLang = document.getElementById('lang-selector').value;
             const t = translations[currentLang];
-            
-            // تحديث واجهة المستخدم
             document.getElementById('app-logo').innerText = t.logo;
             document.getElementById('gps-btn').innerHTML = `<i class="fas fa-crosshairs"></i> ${t.gps}`;
             document.getElementById('from-input').placeholder = t.from;
             document.getElementById('to-input').placeholder = t.to;
             document.getElementById('search-btn').innerText = t.search;
-            
-            // اتجاه الصفحة
             document.documentElement.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
-            document.documentElement.lang = currentLang;
+        }
+
+        // خاصية الإشعارات
+        function enableNotifications() {
+            if (!("Notification" in window)) {
+                alert("متصفحك لا يدعم الإشعارات.");
+                return;
+            }
+
+            Notification.requestPermission().then(permission => {
+                if (permission === "granted") {
+                    const t = translations[currentLang];
+                    // إرسال إشعار تجريبي فوري
+                    new Notification(t.notifTitle, {
+                        body: t.notifBody,
+                        icon: "https://cdn-icons-png.flaticon.com/512/785/785431.png"
+                    });
+                }
+            });
         }
 
         function filterStations(type) {
@@ -246,12 +272,10 @@
                     const uLng = position.coords.longitude;
                     let closest = stationsDB[0];
                     let minDist = Infinity;
-
                     stationsDB.forEach(s => {
                         const d = Math.sqrt(Math.pow(uLat - s.lat, 2) + Math.pow(uLng - s.lng, 2));
                         if (d < minDist) { minDist = d; closest = s; }
                     });
-
                     const name = currentLang === 'ar' ? closest.nameAr : (currentLang === 'fr' ? closest.nameFr : closest.nameEn);
                     selectStation('from', name, closest.lat, closest.lng);
                     alert(translations[currentLang].gpsSuccess + name);
@@ -289,13 +313,12 @@
                     <h3>${t.ticketTitle}</h3>
                     <p>${from} ⮕ ${to}</p>
                     <p>${t.price} | ⏱️ 08:45</p>
-                    <button style="width:100%; padding:10px; margin-top:10px; border-radius:10px; border:none; background:white; color:green; font-weight:bold;">${t.notify}</button>
+                    <button class="notify-btn" onclick="enableNotifications()">${t.notify}</button>
                 </div>
             `;
         }
 
         function toggleTheme() { document.body.classList.toggle('dark-mode'); }
-        
         window.onload = changeLanguage;
     </script>
 </body>
