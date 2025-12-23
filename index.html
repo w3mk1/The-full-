@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SNTF Go - Smart Tracker</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    
+    <style>
+        :root {
+            --md-primary: #006d3a;
+            --md-surface: #f3f4f1;
+            --md-card: #ffffff;
+            --md-text: #1a1c19;
+            --md-outline: #72796f;
+        }
+
+        .dark-mode {
+            --md-surface: #111411;
+            --md-card: #1c1f1c;
+            --md-text: #e2e3dd;
+            --md-outline: #424940;
+        }
+
+        body {
+            background: var(--md-surface);
+            color: var(--md-text);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            margin: 0; padding: 10px;
+            transition: 0.3s;
+        }
+
+        .app-container { max-width: 500px; margin: auto; }
+
+        .card {
+            background: var(--md-card);
+            border-radius: 28px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 1px solid var(--md-outline);
+        }
+
+        .input-field {
+            background: var(--md-surface);
+            padding: 12px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        input {
+            background: none; border: none; outline: none;
+            color: inherit; width: 100%; font-size: 16px;
+        }
+
+        .suggestion-box {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: var(--md-card); z-index: 2000;
+            max-height: 150px; overflow-y: auto;
+            border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+
+        .suggestion-item { padding: 12px; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.05); }
+        .suggestion-item:hover { background: var(--md-primary); color: white; }
+
+        .btn-gps {
+            background: #e8f5e9; color: var(--md-primary);
+            border: 1px solid var(--md-primary);
+            width: 100%; padding: 10px; border-radius: 100px;
+            cursor: pointer; margin-bottom: 10px; font-weight: bold;
+        }
+
+        .btn-primary {
+            background: var(--md-primary); color: white; border: none;
+            width: 100%; padding: 16px; border-radius: 100px;
+            font-weight: bold; cursor: pointer; font-size: 16px;
+        }
+
+        #map { height: 300px; border-radius: 20px; margin-top: 10px; z-index: 1; }
+        
+        .ticket {
+            background: var(--md-primary); color: white;
+            padding: 20px; border-radius: 24px; margin-top: 15px;
+        }
+
+        header { display: flex; justify-content: space-between; align-items: center; padding: 10px; }
+    </style>
+</head>
+<body class="light-mode">
+
+    <div class="app-container">
+        <header>
+            <div style="font-weight: bold; font-size: 1.3rem;">🚆 SNTF Go Pro</div>
+            <button onclick="toggleTheme()" style="background:none; border:none; cursor:pointer; font-size:1.5rem;">🌙</button>
+        </header>
+
+        <div class="card">
+            <button class="btn-gps" onclick="getLocation()">
+                <i class="fas fa-crosshairs"></i> تحديد أقرب محطة تلقائياً
+            </button>
+            
+            <div class="input-field">
+                <i class="fas fa-map-marker-alt" style="color:var(--md-primary)"></i>
+                <input type="text" id="from-input" placeholder="من (انطلاق)..." onkeyup="filterStations('from')">
+                <div id="from-list" class="suggestion-box"></div>
+            </div>
+
+            <div class="input-field">
+                <i class="fas fa-flag-checkered"></i>
+                <input type="text" id="to-input" placeholder="إلى (وصول)..." onkeyup="filterStations('to')">
+                <div id="to-list" class="suggestion-box"></div>
+            </div>
+
+            <button class="btn-primary" onclick="startTracking()">بحث وتتبع الرحلة</button>
+        </div>
+
+        <div id="map-section" class="card" style="display:none;">
+            <div id="map"></div>
+            <p id="distance-info" style="text-align: center; margin-top: 10px; font-weight: bold;"></p>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const stationsDB = [
+            { name: "الجزائر - آغا", lat: 36.7645, lng: 3.0515 },
+            { name: "بني مراد", lat: 36.5050, lng: 2.8610 },
+            { name: "البليدة", lat: 36.4701, lng: 2.8288 },
+            { name: "بوفاريك", lat: 36.5744, lng: 2.9119 },
+            { name: "وهران", lat: 35.6971, lng: -0.6308 },
+            { name: "قسنطينة", lat: 36.3650, lng: 6.6147 },
+            { name: "عنابة", lat: 36.9000, lng: 7.7667 }
+        ];
+
+        let map, userMarker, routeLine;
+
+        // 1. وظيفة GPS: البحث عن أقرب محطة
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const uLat = position.coords.latitude;
+                    const uLng = position.coords.longitude;
+                    
+                    let closest = stationsDB[0];
+                    let minDist = Infinity;
+
+                    stationsDB.forEach(s => {
+                        const d = Math.sqrt(Math.pow(uLat - s.lat, 2) + Math.pow(uLng - s.lng, 2));
+                        if (d < minDist) {
+                            minDist = d;
+                            closest = s;
+                        }
+                    });
+
+                    selectStation('from', closest.name, closest.lat, closest.lng);
+                    alert(`تم تحديد موقعك! أقرب محطة هي: ${closest.name}`);
+                });
+            } else {
+                alert("GPS غير مدعوم في متصفحك.");
+            }
+        }
+
+        // 2. إدارة اختيار المحطات
+        function filterStations(type) {
+            const query = document.getElementById(`${type}-input`).value;
+            const list = document.getElementById(`${type}-list`);
+            list.innerHTML = "";
+            if (query.length < 1) return;
+
+            stationsDB.filter(s => s.name.includes(query)).forEach(s => {
+                const div = document.createElement('div');
+                div.className = "suggestion-item";
+                div.innerText = s.name;
+                div.onclick = () => selectStation(type, s.name, s.lat, s.lng);
+                list.appendChild(div);
+            });
+        }
+
+        function selectStation(type, name, lat, lng) {
+            const input = document.getElementById(`${type}-input`);
+            input.value = name;
+            input.setAttribute('data-lat', lat);
+            input.setAttribute('data-lng', lng);
+            document.getElementById(`${type}-list`).innerHTML = "";
+        }
+
+        // 3. التتبع والرسم على الخريطة
+        function startTracking() {
+            const f = document.getElementById('from-input');
+            const t = document.getElementById('to-input');
+
+            if (!f.getAttribute('data-lat') || !t.getAttribute('data-lat')) return alert("اختر المحطات أولاً");
+
+            document.getElementById('map-section').style.display = 'block';
+            const sPos = [f.getAttribute('data-lat'), f.getAttribute('data-lng')];
+            const ePos = [t.getAttribute('data-lat'), t.getAttribute('data-lng')];
+
+            if (!map) {
+                map = L.map('map').setView(sPos, 10);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            } else {
+                map.setView(sPos, 10);
+            }
+
+            if(routeLine) map.removeLayer(routeLine);
+            routeLine = L.polyline([sPos, ePos], {color: 'green', weight: 5, opacity: 0.6}).addTo(map);
+            
+            L.marker(sPos).addTo(map).bindPopup("انطلاق").openPopup();
+            L.marker(ePos).addTo(map).bindPopup("وصول");
+
+            showTicketInfo(f.value, t.value);
+        }
+
+        function showTicketInfo(from, to) {
+            document.getElementById('results').innerHTML = `
+                <div class="ticket">
+                    <h3>🎫 تفاصيل الرحلة</h3>
+                    <p>من: ${from} | إلى: ${to}</p>
+                    <p>💰 السعر: 120 دج | ⏱️ الوقت: 08:45</p>
+                    <button onclick="alert('تنبيه مفعل!')" style="width:100%; padding:10px; margin-top:10px; border-radius:10px; border:none; background:white; color:green; font-weight:bold;">تنبيهي عند الوصول</button>
+                </div>
+            `;
+        }
+
+        function toggleTheme() { document.body.classList.toggle('dark-mode'); }
+    </script>
+</body>
+</html>
